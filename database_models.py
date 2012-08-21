@@ -2,6 +2,7 @@ from google.appengine.ext import db
 import tools
 import blog
 
+
 def blog_key(name = 'default'):
     return db.Key.from_path('blogs', name)
 
@@ -45,4 +46,12 @@ class Post(db.Model):
     def render(self):
         self._render_text = self.content.replace('\n', '<br>')
         return blog.render_template("post.html", p = self)
+
+    def as_dict(self):
+        time_fmt = '%c'
+        d = {'subject': self.subject,
+             'content': self.content,
+             'created': self.created.strftime(time_fmt),
+             'last_modified': self.last_modified.strftime(time_fmt)}
+        return d
 

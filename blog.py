@@ -1,8 +1,9 @@
 import os
 
 from google.appengine.ext import db
-import webapp2
 import jinja2
+import json
+import webapp2
 
 import database_models
 import tools
@@ -29,6 +30,11 @@ class BlogHandler(webapp2.RequestHandler):
     def render(self, template, **kw):
         self.write(self.render_str(template, **kw))
 
+    def render_json(self, d):
+        json_txt = json.dumps(d)
+        self.response.headers['Content-Type'] = 'application/json; charset=UTF-8'
+        self.write(json_txt)
+
     def set_secure_cookie(self, name, val):
         cookie_val = tools.make_secure_val(val)
         self.response.headers.add_header('Set-Cookie', '%s=%s; Path=/' % (name, cookie_val))
@@ -47,6 +53,11 @@ class BlogHandler(webapp2.RequestHandler):
         webapp2.RequestHandler.initialize(self, *a, **kw)
         uid = self.read_secure_cookie('user_id')
         self.user = uid and database_models.User.by_id(int(uid))
+
+        if self.request.url.endswith('.json'):
+            self.format = 'json'
+        else:
+            self.format = 'html'
 
 def render_post(response, post):
     response.out.write('<b>' + post.subject + '</b><br>')
@@ -73,9 +84,7 @@ class Login(BlogHandler):
 class Logout(BlogHandler):
     def get(self):
         self.logout()
-        self.redirect('/')
-
-
+        self.redirect('/signup')
 
 
 
@@ -130,7 +139,10 @@ class Welcome(BlogHandler):
 class BlogFront(BlogHandler):
     def get(self):
         posts = db.GqlQuery("select * from Post order by created desc limit 10")
-        self.render('front.html', posts = posts)
+        if self.format == 'html':
+            self.render('front.html', posts = posts)
+        else:
+            return self.render_json([p.as_dict() for p in posts])
 
 class PostPage(BlogHandler):
     def get(self, post_id):
@@ -140,8 +152,10 @@ class PostPage(BlogHandler):
         if not post:
             self.error(404)
             return
-
-        self.render("permalink.html", post = post)
+        if self.format == 'html':
+            self.render("permalink.html", post = post)
+        else:
+            self.render_json(post.as_dict())
 
 class NewPost(BlogHandler):
     def get(self):
@@ -159,8 +173,8 @@ class NewPost(BlogHandler):
             error = "subject and content, please!"
             self.render("newpost.html", subject=subject, content=content, error=error)
 
-app = webapp2.WSGIApplication([('/?', BlogFront),
-                                ('/([0-9]+)', PostPage),
+app = webapp2.WSGIApplication([('/?(?:\.json)?', BlogFront),
+                                ('/([0-9]+)(?:\.json)?', PostPage),
                                 ('/newpost', NewPost),
                                 ('/signup', Signup),
                                 ('/login', Login),
