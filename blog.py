@@ -1,6 +1,8 @@
 import os
 
 from google.appengine.ext import db
+from google.appengine.api import memcache
+
 import jinja2
 import json
 import webapp2
@@ -136,9 +138,30 @@ class Welcome(BlogHandler):
             self.redirect('/signup')
 
 
+# Functions for getting and setting posts into a memcache
+def add_post(post):
+    post.put()
+    get_posts(update = True)
+    return str(post.key().id())
+
+def get_post(post_key):
+    return memcache.get(post_key)
+
+def get_posts(update = False):
+    q = db.GqlQuery("select * from Post order by created desc limit 10")
+    mc_key = 'BLOGS'
+
+    posts = memcache.get(mc_key)
+    if update or posts is None:
+        posts = list(q)
+        memcache.set(mc_key, posts)
+    return posts
+
+
+
 class BlogFront(BlogHandler):
     def get(self):
-        posts = db.GqlQuery("select * from Post order by created desc limit 10")
+        posts = get_posts()
         if self.format == 'html':
             self.render('front.html', posts = posts)
         else:
@@ -146,8 +169,15 @@ class BlogFront(BlogHandler):
 
 class PostPage(BlogHandler):
     def get(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=database_models.blog_key())
-        post = db.get(key)
+        post_key = 'POST_' + post_id
+
+        post = get_post(post_key)
+
+        if not post:
+            key = db.Key.from_path('Post', int(post_id), parent=database_models.blog_key())
+            post = db.get(key)
+            if post:
+                memcache.set(post_key, post)
 
         if not post:
             self.error(404)
@@ -167,8 +197,9 @@ class NewPost(BlogHandler):
 
         if subject and content:
             p = database_models.Post(parent = database_models.blog_key(), subject = subject, content = content)
-            p.put()
-            self.redirect('/%s' % str(p.key().id()))
+            post_id = add_post(p)
+
+            self.redirect('/%s' % post_id)
         else:
             error = "subject and content, please!"
             self.render("newpost.html", subject=subject, content=content, error=error)
