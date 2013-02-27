@@ -10,17 +10,16 @@ import webapp2
 import database_models
 import tools
 
-
-
-
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
-                               autoescape = True)
+jinja_env = jinja2.Environment(
+    loader=jinja2.FileSystemLoader(template_dir), autoescape=True)
+
 
 # Renders parameters into the template
 def render_template(template, **params):
     t = jinja_env.get_template(template)
     return t.render(params)
+
 
 class BlogHandler(webapp2.RequestHandler):
     def write(self, *a, **kw):
@@ -39,7 +38,8 @@ class BlogHandler(webapp2.RequestHandler):
 
     def set_secure_cookie(self, name, val):
         cookie_val = tools.make_secure_val(val)
-        self.response.headers.add_header('Set-Cookie', '%s=%s; Path=/' % (name, cookie_val))
+        self.response.headers.add_header(
+            'Set-Cookie', '%s=%s; Path=/' % (name, cookie_val))
 
     def read_secure_cookie(self, name):
         cookie_val = self.request.cookies.get(name)
@@ -61,10 +61,10 @@ class BlogHandler(webapp2.RequestHandler):
         else:
             self.format = 'html'
 
+
 def render_post(response, post):
     response.out.write('<b>' + post.subject + '</b><br>')
     response.out.write(post.content)
-
 
 
 # Handlers for different blog pages
@@ -89,7 +89,6 @@ class Logout(BlogHandler):
         self.redirect('/signup')
 
 
-
 class Signup(BlogHandler):
     def get(self):
         self.render("signup.html")
@@ -99,8 +98,8 @@ class Signup(BlogHandler):
         self.password = self.request.get('password')
         self.verify = self.request.get('verify')
         self.email = self.request.get('email')
-        params = dict(username = self.username,
-            email = self.email)
+        params = dict(
+            username=self.username, email=self.email)
         we_have_error = False
         if not tools.valid_username(self.username):
             we_have_error = True
@@ -123,7 +122,8 @@ class Signup(BlogHandler):
                 params['error_username'] = 'That user already exists.'
                 self.render('signup.html', **params)
             else:
-                u = database_models.User.register(self.username, self.password, self.email)
+                u = database_models.User.register(
+                    self.username, self.password, self.email)
                 u.put()
 
                 self.login(u)
@@ -141,13 +141,15 @@ class Welcome(BlogHandler):
 # Functions for getting and setting posts into a memcache
 def add_post(post):
     post.put()
-    get_posts(update = True)
+    get_posts(update=True)
     return str(post.key().id())
+
 
 def get_post(post_key):
     return memcache.get(post_key)
 
-def get_posts(update = False):
+
+def get_posts(update=False):
     q = db.GqlQuery("select * from Post order by created desc limit 10")
     mc_key = 'BLOGS'
 
@@ -158,14 +160,14 @@ def get_posts(update = False):
     return posts
 
 
-
 class BlogFront(BlogHandler):
     def get(self):
         posts = get_posts()
         if self.format == 'html':
-            self.render('front.html', posts = posts)
+            self.render('front.html', posts=posts)
         else:
             return self.render_json([p.as_dict() for p in posts])
+
 
 class PostPage(BlogHandler):
     def get(self, post_id):
@@ -174,7 +176,8 @@ class PostPage(BlogHandler):
         post = get_post(post_key)
 
         if not post:
-            key = db.Key.from_path('Post', int(post_id), parent=database_models.blog_key())
+            key = db.Key.from_path(
+                'Post', int(post_id), parent=database_models.blog_key())
             post = db.get(key)
             if post:
                 memcache.set(post_key, post)
@@ -183,9 +186,10 @@ class PostPage(BlogHandler):
             self.error(404)
             return
         if self.format == 'html':
-            self.render("permalink.html", post = post)
+            self.render("permalink.html", post=post)
         else:
             self.render_json(post.as_dict())
+
 
 class NewPost(BlogHandler):
     def get(self):
@@ -196,13 +200,19 @@ class NewPost(BlogHandler):
         content = self.request.get('content')
 
         if subject and content:
-            p = database_models.Post(parent = database_models.blog_key(), subject = subject, content = content)
+            p = database_models.Post(
+                parent=database_models.blog_key(),
+                subject=subject,
+                content=content
+            )
             post_id = add_post(p)
 
             self.redirect('/%s' % post_id)
         else:
             error = "subject and content, please!"
-            self.render("newpost.html", subject=subject, content=content, error=error)
+            self.render(
+                "newpost.html", subject=subject, content=content, error=error)
+
 
 app = webapp2.WSGIApplication([('/?(?:\.json)?', BlogFront),
                                 ('/([0-9]+)(?:\.json)?', PostPage),
